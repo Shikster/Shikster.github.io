@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Chests and TreasureTables</title>
+  <style>
+    body { margin: 0; background: black; overflow: hidden; }
+    /* UI Info Box */
+    #ui-info {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 4px;
+      z-index: 1000;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    /* Map styles */
+    #map-container { position: relative; width: 100%; height: 100vh; overflow: hidden; cursor: grab; background: black; }
+    #map-wrapper { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+    #map { width: 4096px; height: 4096px; background: url('fortjoy.png') no-repeat center/cover; }
+    .chest-icon {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      cursor: pointer;
+      transition: transform 0.1s ease-out, filter 0.1s ease-in-out;
+      z-index: 1;
+      background: transparent;
+    }
+    .chest-icon img { width: 50px; height: 50px; background: transparent; }
+    .chest-icon:hover { filter: drop-shadow(0 0 10px #fff); }
+    .chest-label {
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .tooltip {
+      display: none;
+      position: absolute;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 5px;
+      border-radius: 5px;
+      pointer-events: auto;
+      z-index: 2;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <!-- UI Info Box -->
+  <div id="ui-info">
+  By Shiki (version 1.0)
+  <br>
+  Click chests to see Treasure Level
+  <br>
+  Click the link to go to TreasureTable for that item</div>
+  
+  <!-- Map and Chests -->
+  <div id="map-container">
+    <div id="map-wrapper">
+      <div id="map"></div>
+    </div>
+    <div id="tooltip" class="tooltip"></div>
+  </div>
+  
+  <script>
+    // Shortcut for getElementById
+    const $ = id => document.getElementById(id),
+          tooltip = $("tooltip"),
+          mapWrapper = $("map-wrapper"),
+          mapContainer = $("map-container");
+
+    let currentChest = null;
+    // Toggle tooltip on chest click
+    const toggleTooltip = e => {
+      e.stopPropagation();
+      // If clicking the same chest again, hide tooltip.
+      if (currentChest === e.currentTarget && tooltip.style.display === "block") {
+        tooltip.style.display = "none";
+        currentChest = null;
+        return;
+      }
+      currentChest = e.currentTarget;
+      const rect = e.currentTarget.getBoundingClientRect();
+      tooltip.style.left = (rect.right + window.pageXOffset + 5) + "px";
+      tooltip.style.top = (rect.top + window.pageYOffset) + "px";
+      
+      const l = e.currentTarget.getAttribute("data-treasurelevel"),
+            d = e.currentTarget.getAttribute("data-TreasureTable"),
+            link = e.currentTarget.getAttribute("data-link");
+      tooltip.innerHTML = `<strong>Treasure Level:</strong> ${l}<br><strong>TreasureTable:</strong> <a href="${link}" target="_blank">${d}</a>`;
+      tooltip.style.display = "block";
+    };
+
+    // Hide tooltip if clicking outside a chest or tooltip
+    document.addEventListener("click", e => {
+      if (!e.target.closest(".chest-icon") && !e.target.closest("#tooltip")) {
+        tooltip.style.display = "none";
+        currentChest = null;
+      }
+    });
+
+    // Map zoom & drag variables
+    let scale = 1, tx = 0, ty = 0, zoomSpeed = 0.1, transitionTimeout;
+    const updateTransform = () => {
+      mapWrapper.style.transform = `translate(${Math.round(tx)}px,${Math.round(ty)}px) scale(${scale.toFixed(2)})`;
+      document.querySelectorAll(".chest-icon").forEach(i =>
+        i.style.transform = `scale(${(1/scale).toFixed(2)}) translateZ(0)`
+      );
+    };
+
+    // Zoom functionality
+    mapContainer.addEventListener("wheel", e => {
+      e.preventDefault();
+      const rect = mapContainer.getBoundingClientRect(),
+            mx = e.clientX - rect.left,
+            my = e.clientY - rect.top,
+            factor = e.deltaY < 0 ? 1 + zoomSpeed : 1 - zoomSpeed,
+            newScale = scale * factor;
+      tx = mx - (newScale/scale) * (mx - tx);
+      ty = my - (newScale/scale) * (my - ty);
+      scale = newScale;
+      mapWrapper.style.transition = "transform .2s ease-out";
+      updateTransform();
+      clearTimeout(transitionTimeout);
+      transitionTimeout = setTimeout(() => mapWrapper.style.transition = "", 200);
+    });
+
+    // Drag functionality
+    let isDragging = false, startX, startY;
+    mapContainer.addEventListener("mousedown", e => {
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      mapContainer.style.cursor = "grabbing";
+    });
+    document.addEventListener("mousemove", e => {
+      if (isDragging) {
+        const dx = e.clientX - startX, dy = e.clientY - startY;
+        tx += dx;
+        ty += dy;
+        startX = e.clientX;
+        startY = e.clientY;
+        updateTransform();
+      }
+    });
+    document.addEventListener("mouseup", () => {
+      isDragging = false;
+      mapContainer.style.cursor = "grab";
+    });
+
+    // Chest data with TreasureTable and link
+    const chestData = [
+      { type: "small",  level: 3, x: 256,  y: 1093, TreasureTable: "Specific_GrenadeArrowScroll", link: "https://docs.google.com/spreadsheets/d/1ZfPbkuVrRWAaikRLyvyhrp9kJY9EyV8LfPkjgqGoMDg/edit?gid=0#gid=0&range=A1373" }, // Chest 1
+      { type: "small",  level: 6, x: 3456, y: 1354, TreasureTable: "Item2",        link: "https://docs.google.com/spreadsheets/d/1zvHWl5nNxXFBZ5rHxbVrHkiLCw8-8AdZ/edit#gid=2106736462&range=A3" }, // Chest 2
+      { type: "small",  level: 3, x: 257,  y: 1186, TreasureTable: "Item3",        link: "https://docs.google.com/spreadsheets/d/1zvHWl5nNxXFBZ5rHxbVrHkiLCw8-8AdZ/edit#gid=2106736462&range=A4" }, // Chest 3
+      { type: "small",  level: 3, x: 1308, y: 607,  TreasureTable: "",             link: "" }, // Chest 4
+      { type: "small",  level: 3, x: 1228, y: 566,  TreasureTable: "",             link: "" }, // Chest 5
+      { type: "small",  level: 3, x: 1093, y: 1115, TreasureTable: "",             link: "" }, // Chest 6
+      { type: "small",  level: 3, x: 980,  y: 629,  TreasureTable: "",             link: "" }, // Chest 7
+      { type: "small",  level: 3, x: 1129, y: 563,  TreasureTable: "",             link: "" }, // Chest 8
+      { type: "small",  level: 3, x: 1615, y: 621,  TreasureTable: "",             link: "" }, // Chest 9
+      { type: "big",    level: 4, x: 1728, y: 638,  TreasureTable: "",             link: "" }, // Chest 10
+      { type: "big",    level: 6, x: 2795, y: 3327, TreasureTable: "",             link: "" }, // Chest 11
+      { type: "medium", level: 6, x: 3093, y: 1040, TreasureTable: "",             link: "" }, // Chest 12
+      { type: "small",  level: 5, x: 2866, y: 1351, TreasureTable: "",             link: "" }, // Chest 13
+      { type: "small",  level: 6, x: 3121, y: 1042, TreasureTable: "",             link: "" }, // Chest 14
+      { type: "small",  level: 3, x: 2814, y: 1074, TreasureTable: "",             link: "" }, // Chest 15
+      { type: "medium", level: 5, x: 3260, y: 1222, TreasureTable: "",             link: "" }, // Chest 16
+      { type: "big",    level: 6, x: 3450, y: 1306, TreasureTable: "",             link: "" }, // Chest 17
+      { type: "big",    level: 6, x: 1927, y: 1470, TreasureTable: "",             link: "" }, // Chest 18
+      { type: "big",    level: 5, x: 2670, y: 689,  TreasureTable: "",             link: "" }, // Chest 19
+      { type: "big",    level: 7, x: 2865, y: 455,  TreasureTable: "",             link: "" }, // Chest 20
+      { type: "small",  level: 7, x: 2901, y: 455,  TreasureTable: "",             link: "" }, // Chest 21
+      { type: "medium", level: 4, x: 1927, y: 1100, TreasureTable: "",             link: "" }, // Chest 22
+      { type: "small",  level: 3, x: 2625, y: 1413, TreasureTable: "",             link: "" }, // Chest 23
+      { type: "small",  level: 3, x: 2381, y: 1149, TreasureTable: "",             link: "" }, // Chest 24
+      { type: "small",  level: 3, x: 2325, y: 1265, TreasureTable: "",             link: "" }, // Chest 25
+      { type: "small",  level: 2, x: 2426, y: 634,  TreasureTable: "",             link: "" }, // Chest 26
+      { type: "small",  level: 3, x: 1288, y: 3130, TreasureTable: "",             link: "" }, // Chest 27
+      { type: "medium", level: 4, x: 1234, y: 2880, TreasureTable: "",             link: "" }, // Chest 28
+      { type: "small",  level: 4, x: 1559, y: 2708, TreasureTable: "",             link: "" }, // Chest 29
+      { type: "medium", level: 8, x: 2994, y: 2373, TreasureTable: "",             link: "" }, // Chest 30
+      { type: "small",  level: 4, x: 1864, y: 3759, TreasureTable: "",             link: "" }, // Chest 31
+      { type: "small",  level: 6, x: 2513, y: 3002, TreasureTable: "",             link: "" }, // Chest 32
+      { type: "small",  level: 7, x: 2691, y: 2256, TreasureTable: "",             link: "" }, // Chest 33
+      { type: "small",  level: 4, x: 1524, y: 2874, TreasureTable: "",             link: "" }, // Chest 34
+      { type: "medium", level: 4, x: 2147, y: 3106, TreasureTable: "",             link: "" }, // Chest 35
+      { type: "medium", level: 5, x: 2144, y: 3049, TreasureTable: "",             link: "" }, // Chest 36
+      { type: "small",  level: 5, x: 2151, y: 2978, TreasureTable: "",             link: "" }, // Chest 37
+      { type: "small",  level: 4, x: 1282, y: 3132, TreasureTable: "",             link: "" }, // Chest 38
+      { type: "small",  level: 3, x: 486,  y: 2835, TreasureTable: "",             link: "" }, // Chest 39
+      { type: "small",  level: 4, x: 966,  y: 2390, TreasureTable: "",             link: "" }, // Chest 40
+      { type: "small",  level: 4, x: 1410, y: 2919, TreasureTable: "",             link: "" }, // Chest 41
+      { type: "small",  level: 2, x: 1128, y: 2000, TreasureTable: "",             link: "" }, // Chest 42
+      { type: "medium", level: 4, x: 1359, y: 2989, TreasureTable: "",             link: "" }, // Chest 43
+      { type: "medium", level: 2, x: 1148, y: 2829, TreasureTable: "",             link: "" }, // Chest 44
+      { type: "small",  level: 2, x: 1207, y: 2693, TreasureTable: "",             link: "" }, // Chest 45
+      { type: "small",  level: 2, x: 1304, y: 3366, TreasureTable: "",             link: "" }, // Chest 46
+      { type: "medium", level: 2, x: 1426, y: 2451, TreasureTable: "",             link: "" }, // Chest 47
+      { type: "medium", level: 3, x: 1232, y: 3244, TreasureTable: "",             link: "" }, // Chest 48
+      { type: "medium", level: 4, x: 1301, y: 2754, TreasureTable: "",             link: "" }, // Chest 49
+      { type: "small",  level: 2, x: 1388, y: 2026, TreasureTable: "",             link: "" }, // Chest 50
+      { type: "small",  level: 2, x: 628,  y: 2639, TreasureTable: "",             link: "" }, // Chest 51
+      { type: "small",  level: 5, x: 1923, y: 2476, TreasureTable: "",             link: "" }, // Chest 52
+      { type: "big",    level: 6, x: 2416, y: 3454, TreasureTable: "",             link: "" }, // Chest 53
+      { type: "medium", level: 4, x: 1979, y: 3190, TreasureTable: "",             link: "" }, // Chest 54
+      { type: "big",    level: 7, x: 2774, y: 2601, TreasureTable: "",             link: "" }, // Chest 55
+      { type: "medium", level: 3, x: 972,  y: 1070, TreasureTable: "",             link: "" }  // Chest 56
+    ];
+    
+    // Create chest elements dynamically
+    chestData.forEach((c, i) => {
+      let d = document.createElement("div");
+      d.className = "chest-icon";
+      d.style.top = c.y + "px";
+      d.style.left = c.x + "px";
+      d.setAttribute("data-treasurelevel", c.level);
+      d.setAttribute("data-reward", c.type);
+      d.setAttribute("data-TreasureTable", c.TreasureTable);
+      d.setAttribute("data-link", c.link);
+      d.addEventListener("click", toggleTooltip);
+      
+      let l = document.createElement("span");
+      l.className = "chest-label";
+      l.textContent = i + 1;
+      d.appendChild(l);
+      
+      let img = document.createElement("img");
+      img.src = c.type === "small" ? "rewardsmall.png" : c.type === "medium" ? "rewardmedium.png" : "rewardbig.png";
+      img.alt = c.type[0].toUpperCase() + c.type.slice(1) + " Chest";
+      d.appendChild(img);
+      
+      mapWrapper.appendChild(d);
+    });
+  </script>
+</body>
+</html>
